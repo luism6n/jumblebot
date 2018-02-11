@@ -7,7 +7,7 @@ func TestJumble(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"A", "N"},
+		{"!", "P"},
 	}
 
 	for _, c := range testCases {
