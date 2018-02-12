@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/luism6n/jumblebot/jumble"
@@ -14,6 +16,7 @@ import (
 var (
 	token *string
 	debug *bool
+	port  *string
 )
 
 func main() {
@@ -41,25 +44,37 @@ func setupBot() (*tgbotapi.BotAPI, tgbotapi.UpdatesChannel) {
 
 	bot, err := tgbotapi.NewBotAPI(*token)
 	if err != nil {
-		fmt.Printf("Bot token is invalid: %s\n", *token)
-		os.Exit(1)
+		die("Bot token is invalid: %s", *token)
 	}
 
 	bot.Debug = *debug
 
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
+	u, err := url.Parse("https://luis-jumble-bot.herokuapp.com/" + *token)
+	if err != nil {
+		die("Parsing webhook URL failed: %s", err.Error())
+	}
 
-	// Never returns error
-	updates, _ := bot.GetUpdatesChan(u)
+	_, err = bot.SetWebhook(tgbotapi.WebhookConfig{
+		URL: u,
+	})
+	if err != nil {
+		die("Error setting webhook: %s", err.Error())
+	}
+
+	updates := bot.ListenForWebhook("/" + *token)
+	log.Print("Listening at 0.0.0.0:" + *port)
+	go http.ListenAndServe("0.0.0.0:"+*port, nil)
 
 	return bot, updates
 }
 
 func readCommandLineFlags() {
 	debug = flag.Bool("debug", false, "If the bot should run in debug mode")
+	port = flag.String("port", "No port provided", "Port to listen for updates")
 	token = flag.String("token", "No token provided", "The bot token")
 	flag.Parse()
+
+	log.Printf("Read arguments.\ndebug: %t\ntoken: %s\nport: %s", *debug, *token, *port)
 }
 
 func newInlineQueryResultArticle(text string) tgbotapi.InlineQueryResultArticle {
@@ -89,4 +104,9 @@ func castToInterfaceSlice(iqra []tgbotapi.InlineQueryResultArticle) []interface{
 	}
 
 	return s
+}
+
+func die(format string, a ...interface{}) {
+	fmt.Printf(format+"\n", a...)
+	os.Exit(1)
 }
